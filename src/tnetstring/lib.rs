@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::f64;
 use std::fmt;
 use std::io;
+use std::vec::Vec;
 use std::num::strconv;
 
 pub enum Error {
@@ -60,13 +61,13 @@ impl fmt::Show for Error {
 
 /// Represents a TNetString value.
 pub enum TNetString {
-    Str(Vec<u8>),
     Int(int),
     Float(f64),
     Bool(bool),
     Null,
     Map(HashMap<Vec<u8>, TNetString>),
-    Vec(Vec<TNetString>),
+    Str(Vec<u8>),
+    Vect(Vec<TNetString>),
 }
 
 /// Serializes a TNetString value into a `Writer`.
@@ -105,7 +106,7 @@ pub fn to_writer(writer: &mut Writer, tnetstring: &TNetString) -> io::IoResult<(
             try!(writer.write(payload.as_slice()));
             write!(writer, "}}")
         }
-        Vec(ref v) => {
+        Vect(ref v) => {
             let mut wr = io::MemWriter::new();
             for e in v.iter() {
                 try!(to_writer(&mut wr as &mut Writer, e))
@@ -207,7 +208,7 @@ pub fn from_reader<R: Reader + Buffer>(rdr: &mut R) -> Result<Option<TNetString>
             }
         }
         b'}' => Some(Map(try!(parse_map(payload.as_slice())))),
-        b']' => Some(Vec(try!(parse_vec(payload.as_slice())))),
+        b']' => Some(Vect(try!(parse_vec(payload.as_slice())))),
         b'!' => {
             match payload.as_slice() {
                 b"true" => Some(Bool(true)),
@@ -326,7 +327,7 @@ impl PartialEq for TNetString {
                     false
                 }
             }
-            (&Vec(ref v0), &Vec(ref v1)) => {
+            (&Vect(ref v0), &Vect(ref v1)) => {
                 v0.eq(v1)
             },
             _ => false
@@ -345,7 +346,7 @@ mod tests {
     use std::rand;
 
     use super::TNetString;
-    use super::{Str, Int, Float, Bool, Null, Map, Vec};
+    use super::{Str, Int, Float, Bool, Null, Map, Vect};
     use super::{from_bytes, to_bytes};
     use super::from_str;
 
@@ -365,11 +366,11 @@ mod tests {
     fn test_format() {
         test("11:hello world,", &Str(b"hello world".to_owned()));
         test("0:}", &Map(HashMap::new()));
-        test("0:]", &Vec(vec![]));
+        test("0:]", &Vect(vec![]));
 
         let mut d = HashMap::new();
         d.insert(b"hello".to_owned(),
-                Vec(vec![
+                Vect(vec![
                     Int(12345678901),
                     Str(b"this".to_owned()),
                     Bool(true),
@@ -389,25 +390,25 @@ mod tests {
         test("10:\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00,",
             &Str(b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_owned()));
         test("24:5:12345#5:67890#5:xxxxx,]",
-            &Vec(vec![
+            &Vect(vec![
                 Int(12345),
                 Int(67890),
                 Str(b"xxxxx".to_owned())]));
         test("18:3:0.1^3:0.2^3:0.4^]",
-           &Vec(vec![Float(0.1), Float(0.2), Float(0.4)]));
+           &Vect(vec![Float(0.1), Float(0.2), Float(0.4)]));
         test("243:238:233:228:223:218:213:208:203:198:193:188:183:178:173:\
                168:163:158:153:148:143:138:133:128:123:118:113:108:103:99:95:\
                91:87:83:79:75:71:67:63:59:55:51:47:43:39:35:31:27:23:19:15:\
                11:hello-there,]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]\
                ]]]]",
-            &Vec(
-                vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(
-                vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(
-                vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(
-                vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(
-                vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(
-                vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(vec![Vec(
-                vec![Vec(vec![Vec(vec![
+            &Vect(
+                vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(
+                vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(
+                vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(
+                vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(
+                vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(
+                vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(vec![Vect(
+                vec![Vect(vec![Vect(vec![
                     Str(b"hello-there".to_owned())
                 ])])])])])])])])])])])])])])])])])])])])])])])])])])])])
                 ])])])])])])])])])])])])])])])])])])])])])])]));
@@ -419,7 +420,7 @@ mod tests {
             if rng.gen_range(depth, 10u32) <= 4u32 {
                 if rng.gen_range(0u32, 1u32) == 0u32 {
                     let n = rng.gen_range(0u32, 10u32);
-                    Vec(Vec::from_fn(n as uint, |_i|
+                    Vect(Vec::from_fn(n as uint, |_i|
                         get_random_object(rng, depth + 1u32)
                     ))
                 } else {
